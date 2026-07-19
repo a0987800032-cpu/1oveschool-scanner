@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff4f8">
+  <title>愛上學活動簽到掃描器</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root { --pink:#ef5a91; --pink-light:#fff4f8; --green:#2e7d32; --red:#c62828; --text:#333; }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; min-height:100vh; padding:24px 18px 36px;
+      background:var(--pink-light); color:var(--text); text-align:center;
+      font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",Arial,sans-serif;
+    }
+    h1 { margin:12px 0 8px; color:var(--pink); font-size:clamp(30px,5vw,48px); }
+    .subtitle { margin:0 auto 18px; max-width:760px; font-size:clamp(18px,3vw,26px); line-height:1.55; }
+    #reader {
+      width:min(92vw,680px); margin:18px auto; overflow:hidden;
+      border:4px solid #fff; border-radius:24px; background:#fff;
+      box-shadow:0 12px 35px rgba(0,0,0,.12);
+    }
+    #status {
+      width:min(92vw,680px); min-height:76px; margin:18px auto 0; padding:18px;
+      border-radius:18px; background:#fff; font-size:clamp(24px,4vw,36px);
+      font-weight:800; line-height:1.35; box-shadow:0 8px 24px rgba(0,0,0,.08);
+    }
+    #status.ready,#status.success { color:var(--green); }
+    #status.processing { color:#d97706; }
+    #status.error { color:var(--red); }
+    .hint { margin-top:14px; color:#666; font-size:16px; }
+    #checkin-frame { position:fixed; width:1px; height:1px; opacity:0; pointer-events:none; border:0; }
+  </style>
+</head>
+<body>
+  <h1>愛上學活動簽到</h1>
+  <p class="subtitle">請將家長機票上的 QR Code 對準 iPad 後鏡頭</p>
+  <div id="reader"></div>
+  <div id="status" class="ready">等待掃描中⋯⋯</div>
+  <div class="hint">掃描後會自動完成簽到，約 3 秒後可掃下一位。</div>
+  <iframe id="checkin-frame" title="簽到處理"></iframe>
+
+  <script>
+    const statusBox = document.getElementById("status");
+    const checkinFrame = document.getElementById("checkin-frame");
+    let scanner;
+    let processing = false;
+    let lastCode = "";
+    let lastScanAt = 0;
+
+    function setStatus(text, type) {
+      statusBox.textContent = text;
+      statusBox.className = type;
+    }
+
+    function isValidCheckinUrl(text) {
+      try {
+        const url = new URL(text);
+        return url.protocol === "https:" &&
+               url.hostname === "script.google.com" &&
+               url.pathname.includes("/macros/s/") &&
+               url.searchParams.has("id");
+      } catch (_) {
+        return false;
+      }
+    }
+
+    async function resumeScanner() {
+      processing = false;
+      checkinFrame.removeAttribute("src");
+      setStatus("等待掃描中⋯⋯", "ready");
+      try {
+        if (scanner && scanner.getState() === Html5QrcodeScannerState.PAUSED) scanner.resume();
+      } catch (_) {}
+    }
+
+    function onScanSuccess(decodedText) {
+      const now = Date.now();
+      if (processing) return;
+      if (decodedText === lastCode && now - lastScanAt < 5000) return;
+
+      lastCode = decodedText;
+      lastScanAt = now;
+
+      if (!isValidCheckinUrl(decodedText)) {
+        setStatus("這不是有效的學生簽到 QR Code", "error");
+        setTimeout(() => setStatus("等待掃描中⋯⋯", "ready"), 2200);
+        return;
+      }
+
+      processing = true;
+      setStatus("簽到處理中⋯⋯", "processing");
+
+      try { scanner.pause(true); } catch (_) {}
+
+      checkinFrame.src = decodedText;
+
+      setTimeout(() => setStatus("✅ 已送出簽到，可準備下一位", "success"), 1200);
+      setTimeout(resumeScanner, 3500);
+    }
+
+    function onScanFailure(_) {}
+
+    scanner = new Html5QrcodeScanner(
+      "reader",
+      {
+        fps: 12,
+        qrbox: { width: 280, height: 280 },
+        rememberLastUsedCamera: true,
+        showTorchButtonIfSupported: true,
+        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+        videoConstraints: { facingMode: { ideal: "environment" } }
+      },
+      false
+    );
+
+    scanner.render(onScanSuccess, onScanFailure);
+  </script>
+</body>
+</html>
