@@ -2,49 +2,215 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
   <meta name="theme-color" content="#fff4f8">
+
   <title>愛上學活動簽到掃描器</title>
+
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
   <style>
-    :root { --pink:#ef5a91; --pink-light:#fff4f8; --green:#2e7d32; --red:#c62828; --text:#333; }
-    * { box-sizing:border-box; }
+    :root {
+      --pink: #ef5a91;
+      --pink-light: #fff4f8;
+      --green: #2e7d32;
+      --orange: #d97706;
+      --red: #c62828;
+      --blue: #1976d2;
+      --text: #333;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      margin:0; min-height:100vh; padding:24px 18px 36px;
-      background:var(--pink-light); color:var(--text); text-align:center;
-      font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",Arial,sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px 18px 36px;
+      background: var(--pink-light);
+      color: var(--text);
+      text-align: center;
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "PingFang TC",
+        "Noto Sans TC",
+        Arial,
+        sans-serif;
     }
-    h1 { margin:12px 0 8px; color:var(--pink); font-size:clamp(30px,5vw,48px); }
-    .subtitle { margin:0 auto 18px; max-width:760px; font-size:clamp(18px,3vw,26px); line-height:1.55; }
+
+    h1 {
+      margin: 12px 0 8px;
+      color: var(--pink);
+      font-size: clamp(30px, 5vw, 48px);
+    }
+
+    .subtitle {
+      margin: 0 auto 16px;
+      max-width: 760px;
+      font-size: clamp(18px, 3vw, 26px);
+      line-height: 1.55;
+    }
+
+    #camera-name {
+      margin: 8px auto 14px;
+      color: #666;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
     #reader {
-      width:min(92vw,680px); margin:18px auto; overflow:hidden;
-      border:4px solid #fff; border-radius:24px; background:#fff;
-      box-shadow:0 12px 35px rgba(0,0,0,.12);
+      width: min(92vw, 680px);
+      min-height: 300px;
+      margin: 18px auto;
+      overflow: hidden;
+      border: 4px solid #fff;
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
     }
+
+    #reader video {
+      width: 100% !important;
+      height: auto !important;
+      object-fit: cover;
+      border-radius: 20px;
+    }
+
+    .controls {
+      width: min(92vw, 680px);
+      margin: 14px auto;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      min-width: 180px;
+      padding: 14px 22px;
+      border: none;
+      border-radius: 14px;
+      color: #fff;
+      font-size: 20px;
+      font-weight: 800;
+      cursor: pointer;
+      touch-action: manipulation;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    #start-button {
+      background: var(--green);
+    }
+
+    #switch-button {
+      background: var(--blue);
+    }
+
     #status {
-      width:min(92vw,680px); min-height:76px; margin:18px auto 0; padding:18px;
-      border-radius:18px; background:#fff; font-size:clamp(24px,4vw,36px);
-      font-weight:800; line-height:1.35; box-shadow:0 8px 24px rgba(0,0,0,.08);
+      width: min(92vw, 680px);
+      min-height: 76px;
+      margin: 18px auto 0;
+      padding: 18px;
+      border-radius: 18px;
+      background: #fff;
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 800;
+      line-height: 1.35;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
     }
-    #status.ready,#status.success { color:var(--green); }
-    #status.processing { color:#d97706; }
-    #status.error { color:var(--red); }
-    .hint { margin-top:14px; color:#666; font-size:16px; }
-    #checkin-frame { position:fixed; width:1px; height:1px; opacity:0; pointer-events:none; border:0; }
+
+    #status.ready,
+    #status.success {
+      color: var(--green);
+    }
+
+    #status.processing {
+      color: var(--orange);
+    }
+
+    #status.error {
+      color: var(--red);
+    }
+
+    .hint {
+      margin-top: 14px;
+      color: #666;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    #checkin-frame {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      border: 0;
+    }
   </style>
 </head>
+
 <body>
+
   <h1>愛上學活動簽到</h1>
-  <p class="subtitle">請將家長機票上的 QR Code 對準 iPad 後鏡頭</p>
+
+  <p id="subtitle" class="subtitle">
+    請將家長機票上的 QR Code 對準 iPad 後鏡頭
+  </p>
+
+  <div id="camera-name">目前使用：後鏡頭</div>
+
   <div id="reader"></div>
-  <div id="status" class="ready">等待掃描中⋯⋯</div>
-  <div class="hint">掃描後會自動完成簽到，約 3 秒後可掃下一位。</div>
-  <iframe id="checkin-frame" title="簽到處理"></iframe>
+
+  <div class="controls">
+    <button id="start-button" type="button">
+      啟動掃描器
+    </button>
+
+    <button id="switch-button" type="button" disabled>
+      🔄 切換前鏡頭
+    </button>
+  </div>
+
+  <div id="status" class="ready">
+    請按「啟動掃描器」
+  </div>
+
+  <div class="hint">
+    第一次使用請允許相機權限。<br>
+    掃描後會自動完成簽到，約 3 秒後可掃下一位。
+  </div>
+
+  <iframe
+    id="checkin-frame"
+    title="簽到處理"
+  ></iframe>
 
   <script>
     const statusBox = document.getElementById("status");
     const checkinFrame = document.getElementById("checkin-frame");
-    let scanner;
+    const startButton = document.getElementById("start-button");
+    const switchButton = document.getElementById("switch-button");
+    const subtitle = document.getElementById("subtitle");
+    const cameraName = document.getElementById("camera-name");
+
+    const scanner = new Html5Qrcode("reader");
+
+    let currentFacingMode = "environment";
+    let scannerRunning = false;
+    let switchingCamera = false;
     let processing = false;
     let lastCode = "";
     let lastScanAt = 0;
@@ -54,68 +220,326 @@
       statusBox.className = type;
     }
 
+    function updateCameraText() {
+      if (currentFacingMode === "environment") {
+        cameraName.textContent = "目前使用：後鏡頭";
+        subtitle.textContent =
+          "請將家長機票上的 QR Code 對準 iPad 後鏡頭";
+        switchButton.textContent = "🔄 切換前鏡頭";
+      } else {
+        cameraName.textContent = "目前使用：前鏡頭";
+        subtitle.textContent =
+          "請將家長機票上的 QR Code 對準 iPad 前鏡頭";
+        switchButton.textContent = "🔄 切換後鏡頭";
+      }
+    }
+
     function isValidCheckinUrl(text) {
       try {
         const url = new URL(text);
-        return url.protocol === "https:" &&
-               url.hostname === "script.google.com" &&
-               url.pathname.includes("/macros/s/") &&
-               url.searchParams.has("id");
+
+        return (
+          url.protocol === "https:" &&
+          url.hostname === "script.google.com" &&
+          url.pathname.includes("/macros/s/") &&
+          url.searchParams.has("id")
+        );
       } catch (_) {
         return false;
+      }
+    }
+
+    function getCameraConstraint() {
+      return {
+        facingMode: {
+          ideal: currentFacingMode
+        }
+      };
+    }
+
+    async function startScanner() {
+      if (scannerRunning || switchingCamera) {
+        return;
+      }
+
+      startButton.disabled = true;
+      switchButton.disabled = true;
+
+      setStatus("正在開啟相機⋯⋯", "processing");
+
+      try {
+        await scanner.start(
+          getCameraConstraint(),
+          {
+            fps: 12,
+
+            qrbox: function(viewfinderWidth, viewfinderHeight) {
+              const minimumSide = Math.min(
+                viewfinderWidth,
+                viewfinderHeight
+              );
+
+              const size = Math.floor(minimumSide * 0.7);
+
+              return {
+                width: size,
+                height: size
+              };
+            },
+
+            aspectRatio: 1.333334,
+
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.QR_CODE
+            ]
+          },
+          onScanSuccess,
+          onScanFailure
+        );
+
+        scannerRunning = true;
+
+        startButton.style.display = "none";
+        switchButton.disabled = false;
+
+        updateCameraText();
+        setStatus("等待掃描中⋯⋯", "ready");
+      } catch (error) {
+        console.error("相機啟動失敗：", error);
+
+        scannerRunning = false;
+        startButton.disabled = false;
+        switchButton.disabled = true;
+
+        setStatus(
+          "無法開啟相機，請允許 Safari 使用相機後再試一次",
+          "error"
+        );
+      }
+    }
+
+    async function stopScanner() {
+      if (!scannerRunning) {
+        return;
+      }
+
+      try {
+        await scanner.stop();
+        await scanner.clear();
+      } catch (error) {
+        console.warn("停止相機時發生問題：", error);
+      }
+
+      scannerRunning = false;
+    }
+
+    async function switchCamera() {
+      if (
+        switchingCamera ||
+        processing ||
+        !scannerRunning
+      ) {
+        return;
+      }
+
+      switchingCamera = true;
+      switchButton.disabled = true;
+
+      setStatus("正在切換鏡頭⋯⋯", "processing");
+
+      const previousFacingMode = currentFacingMode;
+
+      currentFacingMode =
+        currentFacingMode === "environment"
+          ? "user"
+          : "environment";
+
+      try {
+        await stopScanner();
+
+        await scanner.start(
+          getCameraConstraint(),
+          {
+            fps: 12,
+
+            qrbox: function(viewfinderWidth, viewfinderHeight) {
+              const minimumSide = Math.min(
+                viewfinderWidth,
+                viewfinderHeight
+              );
+
+              const size = Math.floor(minimumSide * 0.7);
+
+              return {
+                width: size,
+                height: size
+              };
+            },
+
+            aspectRatio: 1.333334,
+
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.QR_CODE
+            ]
+          },
+          onScanSuccess,
+          onScanFailure
+        );
+
+        scannerRunning = true;
+        updateCameraText();
+        setStatus("等待掃描中⋯⋯", "ready");
+      } catch (error) {
+        console.error("鏡頭切換失敗：", error);
+
+        currentFacingMode = previousFacingMode;
+
+        try {
+          await scanner.start(
+            getCameraConstraint(),
+            {
+              fps: 12,
+
+              qrbox: {
+                width: 280,
+                height: 280
+              },
+
+              formatsToSupport: [
+                Html5QrcodeSupportedFormats.QR_CODE
+              ]
+            },
+            onScanSuccess,
+            onScanFailure
+          );
+
+          scannerRunning = true;
+          updateCameraText();
+
+          setStatus(
+            "此裝置無法切換該鏡頭，已恢復原本鏡頭",
+            "error"
+          );
+
+          setTimeout(function() {
+            setStatus("等待掃描中⋯⋯", "ready");
+          }, 2500);
+        } catch (restartError) {
+          console.error(
+            "恢復原本鏡頭失敗：",
+            restartError
+          );
+
+          scannerRunning = false;
+          startButton.style.display = "inline-block";
+          startButton.disabled = false;
+
+          setStatus(
+            "相機無法重新啟動，請重新整理網頁",
+            "error"
+          );
+        }
+      } finally {
+        switchingCamera = false;
+        switchButton.disabled = !scannerRunning;
+      }
+    }
+
+    async function pauseScanner() {
+      try {
+        if (scannerRunning) {
+          scanner.pause(true);
+        }
+      } catch (error) {
+        console.warn("暫停掃描失敗：", error);
       }
     }
 
     async function resumeScanner() {
       processing = false;
       checkinFrame.removeAttribute("src");
+
       setStatus("等待掃描中⋯⋯", "ready");
+
       try {
-        if (scanner && scanner.getState() === Html5QrcodeScannerState.PAUSED) scanner.resume();
-      } catch (_) {}
+        if (scannerRunning) {
+          scanner.resume();
+        }
+      } catch (error) {
+        console.warn("恢復掃描失敗：", error);
+      }
+
+      switchButton.disabled = !scannerRunning;
     }
 
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      if (processing) return;
-      if (decodedText === lastCode && now - lastScanAt < 5000) return;
+
+      if (processing || switchingCamera) {
+        return;
+      }
+
+      if (
+        decodedText === lastCode &&
+        now - lastScanAt < 5000
+      ) {
+        return;
+      }
 
       lastCode = decodedText;
       lastScanAt = now;
 
       if (!isValidCheckinUrl(decodedText)) {
-        setStatus("這不是有效的學生簽到 QR Code", "error");
-        setTimeout(() => setStatus("等待掃描中⋯⋯", "ready"), 2200);
+        setStatus(
+          "這不是有效的學生簽到 QR Code",
+          "error"
+        );
+
+        setTimeout(function() {
+          if (!processing) {
+            setStatus("等待掃描中⋯⋯", "ready");
+          }
+        }, 2200);
+
         return;
       }
 
       processing = true;
+      switchButton.disabled = true;
+
       setStatus("簽到處理中⋯⋯", "processing");
 
-      try { scanner.pause(true); } catch (_) {}
+      pauseScanner();
 
       checkinFrame.src = decodedText;
 
-      setTimeout(() => setStatus("✅ 已送出簽到，可準備下一位", "success"), 1200);
+      setTimeout(function() {
+        setStatus(
+          "✅ 已送出簽到，可準備下一位",
+          "success"
+        );
+      }, 1200);
+
       setTimeout(resumeScanner, 3500);
     }
 
-    function onScanFailure(_) {}
+    function onScanFailure(_) {
+      // 沒掃到 QR Code 時不顯示錯誤，
+      // 讓掃描器持續運作。
+    }
 
-    scanner = new Html5QrcodeScanner(
-      "reader",
-      {
-        fps: 12,
-        qrbox: { width: 280, height: 280 },
-        rememberLastUsedCamera: true,
-        showTorchButtonIfSupported: true,
-        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-        videoConstraints: { facingMode: { ideal: "environment" } }
-      },
-      false
+    startButton.addEventListener(
+      "click",
+      startScanner
     );
 
-    scanner.render(onScanSuccess, onScanFailure);
+    switchButton.addEventListener(
+      "click",
+      switchCamera
+    );
+
+    updateCameraText();
   </script>
+
 </body>
 </html>
