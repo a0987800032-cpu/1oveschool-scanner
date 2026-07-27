@@ -21,7 +21,7 @@
       --green: #2e7d32;
       --orange: #d97706;
       --red: #c62828;
-      --blue: #1976d2;
+      --blue: #4688d8;
       --text: #333;
     }
 
@@ -52,16 +52,16 @@
     }
 
     .subtitle {
-      margin: 0 auto 16px;
+      margin: 0 auto 10px;
       max-width: 760px;
       font-size: clamp(18px, 3vw, 26px);
       line-height: 1.55;
     }
 
     #camera-name {
-      margin: 8px auto 14px;
+      margin: 12px auto 16px;
       color: #666;
-      font-size: 16px;
+      font-size: 18px;
       font-weight: 700;
     }
 
@@ -78,7 +78,8 @@
 
     #reader video {
       width: 100% !important;
-      height: auto !important;
+      height: 100% !important;
+      min-height: 300px;
       object-fit: cover;
       border-radius: 20px;
     }
@@ -88,25 +89,26 @@
       margin: 14px auto;
       display: flex;
       justify-content: center;
-      gap: 12px;
+      gap: 14px;
       flex-wrap: wrap;
     }
 
     button {
-      min-width: 180px;
+      min-width: 210px;
+      min-height: 66px;
       padding: 14px 22px;
       border: none;
-      border-radius: 14px;
-      color: #fff;
-      font-size: 20px;
+      border-radius: 16px;
+      color: white;
+      font-size: 22px;
       font-weight: 800;
       cursor: pointer;
       touch-action: manipulation;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+      box-shadow: 0 7px 18px rgba(0, 0, 0, 0.15);
     }
 
     button:disabled {
-      opacity: 0.55;
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
@@ -148,7 +150,7 @@
       margin-top: 14px;
       color: #666;
       font-size: 16px;
-      line-height: 1.6;
+      line-height: 1.7;
     }
 
     #checkin-frame {
@@ -167,10 +169,12 @@
   <h1>愛上學活動簽到</h1>
 
   <p id="subtitle" class="subtitle">
-    請將家長機票上的 QR Code 對準 iPad 後鏡頭
+    請先按下「啟動掃描器」
   </p>
 
-  <div id="camera-name">目前使用：後鏡頭</div>
+  <div id="camera-name">
+    相機尚未啟動
+  </div>
 
   <div id="reader"></div>
 
@@ -180,7 +184,7 @@
     </button>
 
     <button id="switch-button" type="button" disabled>
-      🔄 切換前鏡頭
+      🔄 切換鏡頭
     </button>
   </div>
 
@@ -189,7 +193,7 @@
   </div>
 
   <div class="hint">
-    第一次使用請允許相機權限。<br>
+    第一次使用時，請允許 Safari 使用相機。<br>
     掃描後會自動完成簽到，約 3 秒後可掃下一位。
   </div>
 
@@ -208,30 +212,42 @@
 
     const scanner = new Html5Qrcode("reader");
 
-    let currentFacingMode = "environment";
+    let cameras = [];
+    let currentCameraIndex = 0;
     let scannerRunning = false;
     let switchingCamera = false;
     let processing = false;
     let lastCode = "";
     let lastScanAt = 0;
 
+    const scannerConfig = {
+      fps: 12,
+
+      qrbox: function(viewfinderWidth, viewfinderHeight) {
+        const minimumSide = Math.min(
+          viewfinderWidth,
+          viewfinderHeight
+        );
+
+        const size = Math.max(
+          220,
+          Math.floor(minimumSide * 0.68)
+        );
+
+        return {
+          width: size,
+          height: size
+        };
+      },
+
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.QR_CODE
+      ]
+    };
+
     function setStatus(text, type) {
       statusBox.textContent = text;
       statusBox.className = type;
-    }
-
-    function updateCameraText() {
-      if (currentFacingMode === "environment") {
-        cameraName.textContent = "目前使用：後鏡頭";
-        subtitle.textContent =
-          "請將家長機票上的 QR Code 對準 iPad 後鏡頭";
-        switchButton.textContent = "🔄 切換前鏡頭";
-      } else {
-        cameraName.textContent = "目前使用：前鏡頭";
-        subtitle.textContent =
-          "請將家長機票上的 QR Code 對準 iPad 前鏡頭";
-        switchButton.textContent = "🔄 切換後鏡頭";
-      }
     }
 
     function isValidCheckinUrl(text) {
@@ -249,12 +265,109 @@
       }
     }
 
-    function getCameraConstraint() {
-      return {
-        facingMode: {
-          ideal: currentFacingMode
-        }
-      };
+    function findBestStartingCamera(cameraList) {
+      const backWords = [
+        "back",
+        "rear",
+        "environment",
+        "後置",
+        "後鏡頭",
+        "背面"
+      ];
+
+      const backIndex = cameraList.findIndex(function(camera) {
+        const label = (camera.label || "").toLowerCase();
+
+        return backWords.some(function(word) {
+          return label.includes(word);
+        });
+      });
+
+      if (backIndex >= 0) {
+        return backIndex;
+      }
+
+      /*
+        iPad 通常前鏡頭會排在前面，
+        後鏡頭可能排在最後，因此找不到名稱時先選最後一個。
+      */
+      return Math.max(0, cameraList.length - 1);
+    }
+
+    function isFrontCamera(camera) {
+      const label = (camera.label || "").toLowerCase();
+
+      return (
+        label.includes("front") ||
+        label.includes("user") ||
+        label.includes("前置") ||
+        label.includes("前鏡頭")
+      );
+    }
+
+    function updateCameraDisplay() {
+      const camera = cameras[currentCameraIndex];
+
+      if (!camera) {
+        cameraName.textContent = "相機尚未啟動";
+        subtitle.textContent = "請先按下「啟動掃描器」";
+        return;
+      }
+
+      const label = camera.label || "";
+
+      if (isFrontCamera(camera)) {
+        cameraName.textContent = "目前使用：前鏡頭";
+        subtitle.textContent =
+          "請將家長機票上的 QR Code 對準 iPad 前鏡頭";
+      } else {
+        cameraName.textContent = "目前使用：後鏡頭";
+        subtitle.textContent =
+          "請將家長機票上的 QR Code 對準 iPad 後鏡頭";
+      }
+
+      if (cameras.length <= 1) {
+        switchButton.textContent = "此裝置只有一個鏡頭";
+        switchButton.disabled = true;
+      } else {
+        switchButton.textContent = "🔄 切換鏡頭";
+        switchButton.disabled = false;
+      }
+    }
+
+    async function loadCameras() {
+      setStatus("正在取得相機權限⋯⋯", "processing");
+
+      cameras = await Html5Qrcode.getCameras();
+
+      if (!cameras || cameras.length === 0) {
+        throw new Error("找不到可使用的相機");
+      }
+
+      currentCameraIndex = findBestStartingCamera(cameras);
+    }
+
+    async function startCurrentCamera() {
+      const camera = cameras[currentCameraIndex];
+
+      if (!camera) {
+        throw new Error("找不到指定的相機");
+      }
+
+      await scanner.start(
+        camera.id,
+        scannerConfig,
+        onScanSuccess,
+        onScanFailure
+      );
+
+      scannerRunning = true;
+      updateCameraDisplay();
+
+      startButton.style.display = "none";
+      switchButton.disabled = cameras.length <= 1;
+
+      setStatus("等待掃描中⋯⋯", "ready");
     }
 
     async function startScanner() {
@@ -265,54 +378,19 @@
       startButton.disabled = true;
       switchButton.disabled = true;
 
-      setStatus("正在開啟相機⋯⋯", "processing");
-
       try {
-        await scanner.start(
-          getCameraConstraint(),
-          {
-            fps: 12,
-
-            qrbox: function(viewfinderWidth, viewfinderHeight) {
-              const minimumSide = Math.min(
-                viewfinderWidth,
-                viewfinderHeight
-              );
-
-              const size = Math.floor(minimumSide * 0.7);
-
-              return {
-                width: size,
-                height: size
-              };
-            },
-
-            aspectRatio: 1.333334,
-
-            formatsToSupport: [
-              Html5QrcodeSupportedFormats.QR_CODE
-            ]
-          },
-          onScanSuccess,
-          onScanFailure
-        );
-
-        scannerRunning = true;
-
-        startButton.style.display = "none";
-        switchButton.disabled = false;
-
-        updateCameraText();
-        setStatus("等待掃描中⋯⋯", "ready");
+        await loadCameras();
+        await startCurrentCamera();
       } catch (error) {
-        console.error("相機啟動失敗：", error);
+        console.error("啟動相機失敗：", error);
 
         scannerRunning = false;
         startButton.disabled = false;
+        startButton.style.display = "inline-block";
         switchButton.disabled = true;
 
         setStatus(
-          "無法開啟相機，請允許 Safari 使用相機後再試一次",
+          "無法開啟相機，請重新整理網頁後再按一次",
           "error"
         );
       }
@@ -323,13 +401,7 @@
         return;
       }
 
-      try {
-        await scanner.stop();
-        await scanner.clear();
-      } catch (error) {
-        console.warn("停止相機時發生問題：", error);
-      }
-
+      await scanner.stop();
       scannerRunning = false;
     }
 
@@ -337,7 +409,8 @@
       if (
         switchingCamera ||
         processing ||
-        !scannerRunning
+        !scannerRunning ||
+        cameras.length <= 1
       ) {
         return;
       }
@@ -347,129 +420,89 @@
 
       setStatus("正在切換鏡頭⋯⋯", "processing");
 
-      const previousFacingMode = currentFacingMode;
-
-      currentFacingMode =
-        currentFacingMode === "environment"
-          ? "user"
-          : "environment";
+      const oldIndex = currentCameraIndex;
 
       try {
         await stopScanner();
 
-        await scanner.start(
-          getCameraConstraint(),
-          {
-            fps: 12,
+        currentCameraIndex =
+          (currentCameraIndex + 1) % cameras.length;
 
-            qrbox: function(viewfinderWidth, viewfinderHeight) {
-              const minimumSide = Math.min(
-                viewfinderWidth,
-                viewfinderHeight
-              );
-
-              const size = Math.floor(minimumSide * 0.7);
-
-              return {
-                width: size,
-                height: size
-              };
-            },
-
-            aspectRatio: 1.333334,
-
-            formatsToSupport: [
-              Html5QrcodeSupportedFormats.QR_CODE
-            ]
-          },
-          onScanSuccess,
-          onScanFailure
-        );
-
-        scannerRunning = true;
-        updateCameraText();
-        setStatus("等待掃描中⋯⋯", "ready");
+        await startCurrentCamera();
       } catch (error) {
-        console.error("鏡頭切換失敗：", error);
+        console.error("切換鏡頭失敗：", error);
 
-        currentFacingMode = previousFacingMode;
+        currentCameraIndex = oldIndex;
 
         try {
           await scanner.start(
-            getCameraConstraint(),
-            {
-              fps: 12,
-
-              qrbox: {
-                width: 280,
-                height: 280
-              },
-
-              formatsToSupport: [
-                Html5QrcodeSupportedFormats.QR_CODE
-              ]
-            },
+            cameras[currentCameraIndex].id,
+            scannerConfig,
             onScanSuccess,
             onScanFailure
           );
 
           scannerRunning = true;
-          updateCameraText();
+          updateCameraDisplay();
 
           setStatus(
-            "此裝置無法切換該鏡頭，已恢復原本鏡頭",
+            "鏡頭切換失敗，已恢復原本鏡頭",
             "error"
           );
 
           setTimeout(function() {
-            setStatus("等待掃描中⋯⋯", "ready");
-          }, 2500);
+            if (!processing) {
+              setStatus("等待掃描中⋯⋯", "ready");
+            }
+          }, 2200);
         } catch (restartError) {
-          console.error(
-            "恢復原本鏡頭失敗：",
-            restartError
-          );
+          console.error("恢復相機失敗：", restartError);
 
           scannerRunning = false;
           startButton.style.display = "inline-block";
           startButton.disabled = false;
 
           setStatus(
-            "相機無法重新啟動，請重新整理網頁",
+            "相機停止運作，請重新整理網頁",
             "error"
           );
         }
       } finally {
         switchingCamera = false;
-        switchButton.disabled = !scannerRunning;
+
+        if (scannerRunning && cameras.length > 1) {
+          switchButton.disabled = false;
+        }
       }
     }
 
-    async function pauseScanner() {
+    function pauseScanner() {
       try {
         if (scannerRunning) {
           scanner.pause(true);
         }
       } catch (error) {
-        console.warn("暫停掃描失敗：", error);
+        console.warn("暫停掃描器失敗：", error);
       }
     }
 
-    async function resumeScanner() {
+    function resumeScanner() {
       processing = false;
       checkinFrame.removeAttribute("src");
-
-      setStatus("等待掃描中⋯⋯", "ready");
 
       try {
         if (scannerRunning) {
           scanner.resume();
         }
       } catch (error) {
-        console.warn("恢復掃描失敗：", error);
+        console.warn("恢復掃描器失敗：", error);
       }
 
-      switchButton.disabled = !scannerRunning;
+      setStatus("等待掃描中⋯⋯", "ready");
+
+      if (scannerRunning && cameras.length > 1) {
+        switchButton.disabled = false;
+      }
     }
 
     function onScanSuccess(decodedText) {
@@ -524,8 +557,7 @@
     }
 
     function onScanFailure(_) {
-      // 沒掃到 QR Code 時不顯示錯誤，
-      // 讓掃描器持續運作。
+      // 沒有掃到 QR Code 時保持掃描，不顯示錯誤。
     }
 
     startButton.addEventListener(
@@ -537,8 +569,6 @@
       "click",
       switchCamera
     );
-
-    updateCameraText();
   </script>
 
 </body>
